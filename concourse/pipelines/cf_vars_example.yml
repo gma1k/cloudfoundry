@@ -1,0 +1,6 @@
+vars:
+  cf-api: << change this to your Cloud Foundry API endpoint >>
+  cf-username: ((cf-username))
+  cf-password: ((cf-password))
+  cf-organization: << change this to your Cloud Foundry organization >>
+  cf-space: << change this to your Cloud Foundry space >>
