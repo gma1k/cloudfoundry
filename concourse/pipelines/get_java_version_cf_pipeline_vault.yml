@@ -1,0 +1,63 @@
+# Define the resources
+resources:
+- name: cf
+  type: cf
+  source:
+    api: << change this to your Cloud Foundry API endpoint >>
+    username: ((vault:secrets/cf/username))
+    password: ((vault:secrets/cf/password))
+    organization: << change this to your Cloud Foundry organization >>
+    space: << change this to your Cloud Foundry space >>
+
+# Define the jobs
+jobs:
+- name: check-all-apps
+  plan:
+  - get: cf # Get the cf resource
+
+  - task: check-java-version-in-apps # Run a custom task to check the Java version in each app
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: governmentpaas/cf-cli # Use an image with cf CLI installed
+      run:
+        path: bash # Use bash to run the commands
+        args:
+        - -c # Use the -c option to pass a command string
+        - | # Use the | character to start a multi-line command string
+          cf api ((cf-api)) --skip-ssl-validation # Connect to the Cloud Foundry API endpoint and skip SSL validation (use --ca-cert instead for production)
+          cf auth ((vault:secrets/cf/username)) ((vault:secrets/cf/password)) # Authenticate with the Cloud Foundry username and password from Vault (use a credential manager for production)
+          cf target -o ((cf-organization)) -s ((cf-space)) # Target the Cloud Foundry organization and space
+
+          # Get the apps in the space and their buildpacks as JSON
+          apps=$(cf curl "/v3/apps?space_guids=$(cf space ((cf-space)) --guid)&fields[buildpacks]=name")
+
+          # Loop through each app in the JSON output
+          for app in $(echo "$apps" | jq -r '.resources[] | @base64'); do
+            _jq() {
+              echo ${app} | base64 --decode | jq -r ${1}
+            }
+
+            app_name=$(_jq '.name') # Get the app name
+            app_buildpack=$(_jq '.lifecycle.data.buildpacks[0]') # Get the app buildpack name
+
+            echo "App name: $app_name" # Print the app name
+            echo "App buildpack: $app_buildpack" # Print the app buildpack name
+
+            if [[ $app_buildpack == *java* ]]; then # Check if the app buildpack contains "java"
+              echo "App is using Java" # Print that the app is using Java
+
+              # Run a cf ssh command to get into the app container and run java -version
+              java_version=$(cf ssh $app_name -c "JAVA_HOME=.java-buildpack/open_jdk_jre java -version 2>&1")
+
+              echo "Java version:" # Print Java version
+              echo "$java_version" # Print the output of java -version
+
+            else
+              echo "App is not using Java" # Print that the app is not using Java
+            fi
+
+            echo "" # Add a blank line for readability
+          done
