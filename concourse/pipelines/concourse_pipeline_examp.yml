@@ -1,0 +1,109 @@
+resources:
+- name: my-app
+  type: git
+  source:
+    uri: https://github.com/<your-repo>
+    branch: master
+
+jobs:
+- name: build-image
+  plan:
+  - get: my-app
+    trigger: true
+  - task: build
+    image: docker-image
+    config:
+      platform: linux
+      inputs:
+      - name: my-app
+      outputs:
+      - name: image
+      params:
+        APP_NAME: my-app
+        DOCKER_IMAGE: docker:19.03.12
+        DOCKER_SERVICE: docker:19.03.12-dind
+        HTTP_PROXY: http://proxy.example.com:8080
+        HTTPS_PROXY: http://proxy.example.com:8080
+        CI_REGISTRY_USER: ((ci_registry_user))
+        CI_REGISTRY_PASSWORD: ((ci_registry_password))
+        CI_REGISTRY_IMAGE: ((ci_registry_image))
+      run:
+        path: sh
+        args:
+        - -exc
+        - |
+          # Log in to the GitLab Container Registry using the proxy variables
+          echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY --proxy $HTTP_PROXY
+          # Build the Docker image for your application using either a Dockerfile or a buildpack using the proxy variables
+          docker build -t $CI_REGISTRY_IMAGE:$BUILD_ID --build-arg HTTP_PROXY=$HTTP_PROXY --build-arg HTTPS_PROXY=$HTTPS_PROXY .
+          # Push the image to the registry using the proxy variables
+          docker push $CI_REGISTRY_IMAGE:$BUILD_ID --proxy $HTTP_PROXY
+
+- name: deploy-app
+  plan:
+  - get: my-app
+    passed:
+    - build-image
+    trigger: true
+  - task: deploy
+    image: docker-image
+    config:
+      platform: linux
+      inputs:
+      - name: my-app
+      params:
+        APP_NAME: my-app
+        CHART_NAME: chart
+        RELEASE_NAME: my-release
+        DOCKER_IMAGE: docker:19.03.12
+        DOCKER_SERVICE: docker:19.03.12-dind
+        HTTP_PROXY: http://proxy.example.com:8080
+        HTTPS_PROXY: http://proxy.example.com:8080
+        CI_REGISTRY_USER: ((ci_registry_user))
+        CI_REGISTRY_PASSWORD: ((ci_registry_password))
+        CI_REGISTRY_IMAGE: ((ci_registry_image))
+      run:
+        path: sh
+        args:
+        - -exc
+        - |
+          # Log in to the GitLab Container Registry using the proxy variables
+          echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY --proxy $HTTP_PROXY
+          # Pull the image from the registry using the proxy variables
+          docker pull $CI_REGISTRY_IMAGE:$BUILD_ID --proxy $HTTP_PROXY
+          # Deploy your application to a Kubernetes cluster using Helm without using the proxy variables (assuming your cluster is not behind a proxy)
+          helm upgrade --install --set image.repository=$CI_REGISTRY_IMAGE --set image.tag=$BUILD_ID $RELEASE_NAME $CHART_NAME
+
+- name: test-app
+  plan:
+  - get: my-app
+    passed:
+    - deploy-app
+    trigger: true
+  - task: test
+    image: docker-image
+    config:
+      platform: linux
+      inputs:
+      - name: my-app
+      params:
+        APP_NAME: my-app
+        TEST_SCRIPT : test.sh
+        DOCKER_IMAGE : docker :19.03.12
+        DOCKER_SERVICE : docker :19.03.12-dind
+        HTTP_PROXY : http ://proxy.example.com :8080
+        HTTPS_PROXY : http ://proxy.example.com :8080
+        CI_REGISTRY_USER : ((ci_registry_user))
+        CI_REGISTRY_PASSWORD : ((ci_registry_password))
+        CI_REGISTRY_IMAGE : ((ci_registry_image))
+      run:
+        path : sh
+        args :
+         - -exc
+         - |
+           # Log in to the GitLab Container Registry using the proxy variables
+           echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin $CI_REGISTRY --proxy $HTTP_PROXY
+           # Pull the image from the registry using the proxy variables
+           docker pull $CI_REGISTRY_IMAGE:$BUILD_ID --proxy $HTTP_PROXY
+           # Run some tests on your deployed application using either Auto Test or a custom test script without using the proxy variables (assuming your application is not behind a proxy)
+           docker run --rm $CI_REGISTRY_IMAGE:$BUILD_ID $TEST_SCRIPT
