@@ -10,8 +10,8 @@ A repository of bash scripts for automating various tasks on CloudFoundry, such 
 - [Features](#features)
 - [Usage](#usage)
 - [License](#license)
-- [CloudFoundry management](scripts/README.md)
-- [Concourse scripts](concourse/README.md)
+- [CloudFoundry management](scripts/)
+- [Concourse scripts](concourse/)
 
 
 ## Technologies
