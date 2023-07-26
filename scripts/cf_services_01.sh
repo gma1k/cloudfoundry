@@ -19,13 +19,9 @@ else
 fi
 
 SPACES=$(cf spaces | tail -n +4)
-
 for SPACE in $SPACES; do
-  # Target the space
   cf target -s $SPACE
-
   SERVICES=$(cf services | tail -n +4)
-
   echo "$SERVICES" | tee -a services.txt
 
 done
@@ -34,7 +30,6 @@ echo "Do you want to logout from Cloud Foundry? (y/n)"
 read LOGOUT
 
 if [ "$LOGOUT" == "y" ]; then
-  # Logout from Cloud Foundry
   cf logout
 else
   echo "Skipping the logout"
