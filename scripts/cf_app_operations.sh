@@ -4,6 +4,7 @@
 # The script also uses the cf curl command to access the Cloud Foundry API endpoints and get more detailed information about the apps. 
 # The script also uses the jq and dig commands to parse JSON data and get IP addresses.
 # The script also allows the user to save the output of each operation to a file.
+set -euf -o pipefail
 
 save_to_file() {
   read -p "Do you want to save the information to a file? (y/n): " answer
